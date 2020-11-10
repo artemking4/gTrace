@@ -3,18 +3,34 @@
 
 local GT = { }
 
+function GT:TableToString(tbl)
+	local str = "{ "
+	for k,v in pairs(tbl) do str = str .. "[" .. self:ValueToString(k) .. "] = " .. self:ValueToString(v) .. ", " end
+	return str .. " }"
+end
+
 function GT:ValueToString(v)
 	local t = type(v)
 	if t == "string" then return '"'..v..'"' end
+	if t == "table" then
+		if v == _G then return "_G" end
+		if v == debug.getregistry() then return "debug.getregistry()" end
+
+		for k,tv in pairs(_G) do
+			if tv == v then return "_G[".. self:ValueToString(k) .."]" end
+		end
+
+		return self:TableToString(v)
+	end
 
 	return tostring(v)
 end
 
-function GT.Hook(event, ...)
-	//if event ~= "call" then return end
+function GT.Hook(event, line)
 	if not GT.Trace then return end
 
 	local info = debug.getinfo(2)
+	info = table.Merge(info, jit.util.funcinfo(info.func))
 	local caller = debug.getinfo(3)
 	if info.func == GT.End then GT.Trace = false return end
 	local s = info.name or "@anonymous"
@@ -37,6 +53,36 @@ function GT.Hook(event, ...)
 		end
 	end
 
+	if #args == 0 and info.addr then
+		local cache = {}
+		for i = 1, 128 do
+			local k, v = debug.getlocal(2, i)
+			if v == nil then
+				table.insert(cache, nil)
+				if #cache > 5 then break end
+			else
+				for k,v in pairs(cache) do
+					table.insert(args, GT:ValueToString(v))
+				end
+
+				table.insert(args, GT:ValueToString(v))
+				table.Empty(cache)
+			end
+		end
+
+		if #args == 0 then
+			local i = -1
+
+			while true do
+				local k, v = debug.getlocal(2, i)
+				if v == nil then break end
+				table.insert(args, GT:ValueToString(v))
+
+				i = i - 1
+			end
+		end
+	end
+
   local str = s
 
 	str = str .. "("
@@ -45,7 +91,7 @@ function GT.Hook(event, ...)
 	end
 	str = str .. ")"
 
-	str = str .. " // " .. caller.short_src .. ":" .. caller.currentline
+	str = str .. "\t\t\t// " .. caller.short_src .. ":" .. caller.currentline
 
 	print(str)
 end
@@ -59,7 +105,7 @@ function GT:Start()
 	PrintInfo("Tracing started")
 	self.Trace = true
 	self.StartTime = SysTime()
-	debug.sethook(self.Hook, "cr")
+	debug.sethook(self.Hook, "c")
 end
 
 function GT:End()
