@@ -1,6 +1,3 @@
-// gTrace by Artemking4
-// A library to trace lua code
-
 local GT = { }
 
 function GT:TableToString(tbl)
@@ -30,7 +27,11 @@ function GT.Hook(event, line)
 	if not GT.Trace then return end
 
 	local info = debug.getinfo(2)
-	info = table.Merge(info, jit.util.funcinfo(info.func))
+
+  if jit then
+	  info = table.Merge(info, jit.util.funcinfo(info.func))
+  end
+
 	local caller = debug.getinfo(3)
 	if info.func == GT.End then GT.Trace = false return end
 	local s = info.name or "@anonymous"
@@ -101,17 +102,21 @@ local function PrintInfo(infostr)
 	print(string.rep("=", 120 - string.len(infostr) - 4) .. " " .. infostr .. " ==" )
 end
 
+function GT:GetTime()
+  return (SysTime or os.clock or function() return 0 end)()
+end
+
 function GT:Start()
 	PrintInfo("Tracing started")
 	self.Trace = true
-	self.StartTime = SysTime()
+	self.StartTime = self:GetTime()
 	debug.sethook(self.Hook, "c")
 end
 
 function GT:End()
 	debug.sethook()
 	self.Trace = true
-	PrintInfo("Tracing done, code ran for: ".. (SysTime() - self.StartTime) .. "s")
+	PrintInfo("Tracing done, code ran for: ".. (self:GetTime() - self.StartTime) .. "s")
 end
 
 return GT
